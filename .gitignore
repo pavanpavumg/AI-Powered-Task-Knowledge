@@ -1,0 +1,26 @@
+# Python virtual environment and cache
+backend/venv/
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Local Database and Vector Store files
+backend/tasks.db
+backend/faiss_index.bin
+backend/metadata_sidecar.pkl
+backend/uploads/
+
+# Node dependencies and build folders
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.eslintcache
+
+# Environment secrets and temp files
+.env
+backend/.env
+frontend/.env
+.DS_Store
+Thumbs.db
