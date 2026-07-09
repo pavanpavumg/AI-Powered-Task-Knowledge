@@ -31,6 +31,7 @@ const AdminDashboard = () => {
   const [taskError, setTaskError] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
+  const [editTaskId, setEditTaskId] = useState(null);
   
   // Analytics & Logs States
   const [analytics, setAnalytics] = useState(null);
@@ -155,18 +156,28 @@ const AdminDashboard = () => {
     setTaskError('');
 
     try {
-      await api.post('/tasks', {
-        title: taskTitle,
-        description: taskDesc,
-        assigned_to: parseInt(taskAssignee)
-      });
-      setTaskSuccess('Task created and assigned successfully!');
+      if (editTaskId) {
+        await api.patch(`/tasks/${editTaskId}`, {
+          title: taskTitle,
+          description: taskDesc,
+          assigned_to: parseInt(taskAssignee)
+        });
+        setTaskSuccess('Task updated successfully!');
+        setEditTaskId(null);
+      } else {
+        await api.post('/tasks', {
+          title: taskTitle,
+          description: taskDesc,
+          assigned_to: parseInt(taskAssignee)
+        });
+        setTaskSuccess('Task created and assigned successfully!');
+      }
       setTaskTitle('');
       setTaskDesc('');
       setTaskAssignee('');
       fetchTasks();
     } catch (err) {
-      setTaskError(err.response?.data?.detail || 'Failed to create task');
+      setTaskError(err.response?.data?.detail || 'Failed to save task changes');
     } finally {
       setCreatingTask(false);
     }
@@ -385,7 +396,7 @@ const AdminDashboard = () => {
               <div className="glass" style={{ padding: '24px' }}>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Plus size={18} style={{ color: 'var(--accent-primary)' }} />
-                  Create New Task
+                  {editTaskId ? 'Edit Task' : 'Create New Task'}
                 </h3>
 
                 {taskSuccess && <div className="alert alert-success" style={{ marginBottom: '16px', fontSize: '0.85rem' }}>{taskSuccess}</div>}
@@ -433,8 +444,25 @@ const AdminDashboard = () => {
                   </div>
 
                   <button type="submit" className="btn btn-primary" disabled={creatingTask} style={{ marginTop: '8px' }}>
-                    {creatingTask ? 'Creating...' : 'Assign Task'}
+                    {creatingTask ? 'Saving...' : editTaskId ? 'Save Changes' : 'Assign Task'}
                   </button>
+                  {editTaskId && (
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      style={{ marginTop: '8px', marginLeft: '8px' }}
+                      onClick={() => {
+                        setEditTaskId(null);
+                        setTaskTitle('');
+                        setTaskDesc('');
+                        setTaskAssignee('');
+                        setTaskSuccess('');
+                        setTaskError('');
+                      }}
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
                 </form>
               </div>
 
@@ -485,14 +513,60 @@ const AdminDashboard = () => {
                     {tasks.map(task => (
                       <div key={task.id} className="glass" style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
-                          <h4 style={{ fontWeight: 600, fontSize: '1rem' }}>{task.title}</h4>
-                          <span className={`badge ${task.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>
-                            {task.status}
-                          </span>
+                          <div>
+                            <h4 style={{ fontWeight: 600, fontSize: '1rem', margin: 0 }}>{task.title}</h4>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ID: {task.id}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                              disabled={task.status !== 'pending'}
+                              onClick={() => {
+                                setEditTaskId(task.id);
+                                setTaskTitle(task.title);
+                                setTaskDesc(task.description || '');
+                                setTaskAssignee(task.assigned_to.toString());
+                                setTaskSuccess('');
+                                setTaskError('');
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                              className="btn btn-outline btn-sm"
+                              style={{ 
+                                padding: '4px 8px', 
+                                fontSize: '0.75rem', 
+                                opacity: task.status === 'pending' ? 1 : 0.4,
+                                cursor: task.status === 'pending' ? 'pointer' : 'not-allowed'
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <span className={`badge ${task.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>
+                              {task.status}
+                            </span>
+                          </div>
                         </div>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '12px' }}>
                           {task.description || 'No description provided.'}
                         </p>
+                        
+                        {task.status === 'completed' && (
+                          <div style={{
+                            background: 'rgba(255, 255, 255, 0.01)',
+                            border: '1px solid rgba(255, 255, 255, 0.05)',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            fontSize: '0.85rem',
+                            marginBottom: '12px',
+                            marginTop: '12px'
+                          }}>
+                            <div><strong style={{ color: 'var(--text-primary)' }}>Finished:</strong> {formatDate(task.completed_at)}</div>
+                            {task.completion_note && (
+                              <div style={{ marginTop: '4px' }}>
+                                <strong style={{ color: 'var(--text-primary)' }}>Completion Note:</strong> {task.completion_note}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
                           <span>Assignee: <strong style={{ color: 'var(--text-primary)' }}>{task.assigned_to_name}</strong></span>
                           <span>Created: {formatDate(task.created_at)}</span>

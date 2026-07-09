@@ -17,6 +17,12 @@ class TaskCreate(BaseModel):
 
 class TaskStatusUpdate(BaseModel):
     status: str
+    completion_note: Optional[str] = None
+
+class TaskEdit(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    assigned_to: Optional[int] = None
 
 class TaskOut(BaseModel):
     id: int
@@ -27,6 +33,8 @@ class TaskOut(BaseModel):
     assigned_to_name: str
     created_by: int
     created_at: datetime
+    completion_note: Optional[str] = None
+    completed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -55,7 +63,9 @@ def create_task(
         assigned_to=task.assigned_to,
         assigned_to_name=assignee_name,
         created_by=task.created_by,
-        created_at=task.created_at
+        created_at=task.created_at,
+        completion_note=task.completion_note,
+        completed_at=task.completed_at
     )
 
 @router.get("/", response_model=List[TaskOut])
@@ -84,7 +94,9 @@ def list_tasks(
                 assigned_to=task.assigned_to,
                 assigned_to_name=assignee_name,
                 created_by=task.created_by,
-                created_at=task.created_at
+                created_at=task.created_at,
+                completion_note=task.completion_note,
+                completed_at=task.completed_at
             )
         )
     return results
@@ -100,7 +112,8 @@ def update_task_status(
         db,
         task_id=id,
         new_status=status_update.status,
-        user_id=current_user.id
+        user_id=current_user.id,
+        completion_note=status_update.completion_note
     )
     
     assignee_name = task.assignee.name if task.assignee else "Unassigned"
@@ -113,5 +126,38 @@ def update_task_status(
         assigned_to=task.assigned_to,
         assigned_to_name=assignee_name,
         created_by=task.created_by,
-        created_at=task.created_at
+        created_at=task.created_at,
+        completion_note=task.completion_note,
+        completed_at=task.completed_at
+    )
+
+@router.patch("/{id}", response_model=TaskOut)
+def edit_task(
+    id: int,
+    task_in: TaskEdit,
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db)
+):
+    update_dict = {k: v for k, v in task_in.dict().items() if v is not None}
+    
+    task = TaskService.edit_task(
+        db,
+        task_id=id,
+        admin_id=current_user.id,
+        update_data=update_dict
+    )
+    
+    assignee_name = task.assignee.name if task.assignee else "Unassigned"
+    
+    return TaskOut(
+        id=task.id,
+        title=task.title,
+        description=task.description,
+        status=task.status.value,
+        assigned_to=task.assigned_to,
+        assigned_to_name=assignee_name,
+        created_by=task.created_by,
+        created_at=task.created_at,
+        completion_note=task.completion_note,
+        completed_at=task.completed_at
     )

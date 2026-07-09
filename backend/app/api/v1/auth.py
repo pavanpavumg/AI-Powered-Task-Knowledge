@@ -12,6 +12,20 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class UserOut(BaseModel):
+    id: int
+    name: str
+    email: str
+    role_name: str
+
+    class Config:
+        from_attributes = True
+
 @router.post("/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     result = AuthService.authenticate_and_create_token(
@@ -29,3 +43,15 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         )
         
     return result
+
+@router.post("/register", response_model=UserOut)
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    user = AuthService.register_user(
+        db, name=request.name, email=request.email, password=request.password
+    )
+    return UserOut(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        role_name=user.role.name
+    )

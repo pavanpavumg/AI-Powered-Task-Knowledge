@@ -13,6 +13,8 @@ const UserDashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [activeCompletingTaskId, setActiveCompletingTaskId] = useState(null);
+  const [completionNote, setCompletionNote] = useState('');
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -32,31 +34,57 @@ const UserDashboard = () => {
     fetchTasks();
   }, []);
 
-  const handleMarkCompleted = async (taskId) => {
-    // Optimistic UI update: update status instantly in the state
-    const originalTasks = [...tasks];
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === taskId ? { ...task, status: 'completed' } : task
-      )
-    );
-
+  const submitCompletion = async (taskId) => {
     try {
-      await api.patch(`/tasks/${taskId}/status`, { status: 'completed' });
+      await api.patch(`/tasks/${taskId}/status`, { 
+        status: 'completed',
+        completion_note: completionNote.trim() || null
+      });
+      setActiveCompletingTaskId(null);
+      setCompletionNote('');
+      fetchTasks();
     } catch (err) {
-      // Revert state if API request fails
-      setTasks(originalTasks);
-      alert(err.response?.data?.detail || 'Failed to complete task. Reverting update.');
+      alert(err.response?.data?.detail || 'Failed to complete task.');
+    }
+  };
+
+  const handleReopenTask = async (taskId) => {
+    try {
+      await api.patch(`/tasks/${taskId}/status`, { status: 'pending' });
+      fetchTasks();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to reopen task.');
     }
   };
 
   const formatDate = (dateStr) => {
+    if (!dateStr) return '';
     const d = new Date(dateStr);
     return d.toLocaleDateString(undefined, { 
       year: 'numeric', 
       month: 'short', 
       day: 'numeric'
     });
+  };
+
+  const formatFullDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString(undefined, { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const canReopen = (completedAtStr) => {
+    if (!completedAtStr) return false;
+    const completedTime = new Date(completedAtStr).getTime();
+    const now = new Date().getTime();
+    const diffInHours = (now - completedTime) / (1000 * 60 * 60);
+    return diffInHours <= 24;
   };
 
   return (
@@ -173,6 +201,63 @@ const UserDashboard = () => {
                     {task.description || 'No description provided.'}
                   </p>
 
+                  {task.completion_note && (
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      fontSize: '0.85rem',
+                      marginTop: '8px'
+                    }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>Completion Note:</div>
+                      <div style={{ color: 'var(--text-secondary)', lineHeight: '1.4' }}>{task.completion_note}</div>
+                    </div>
+                  )}
+
+                  {task.status === 'pending' && activeCompletingTaskId === task.id && (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      padding: '12px',
+                      border: '1px dashed var(--border-color)',
+                      borderRadius: '8px',
+                      marginTop: '8px',
+                      background: 'rgba(255, 255, 255, 0.01)'
+                    }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Add a note about how you completed this (optional):</label>
+                      <textarea
+                        className="form-control"
+                        rows="2"
+                        maxLength="500"
+                        placeholder="e.g. Verified layout on chrome and safari..."
+                        value={completionNote}
+                        onChange={(e) => setCompletionNote(e.target.value)}
+                        style={{ fontSize: '0.85rem' }}
+                      />
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                        <button 
+                          className="btn btn-primary btn-sm"
+                          style={{ fontSize: '0.75rem' }}
+                          onClick={() => submitCompletion(task.id)}
+                        >
+                          Confirm
+                        </button>
+                        <button 
+                          className="btn btn-outline btn-sm"
+                          style={{ fontSize: '0.75rem' }}
+                          onClick={() => {
+                            setActiveCompletingTaskId(null);
+                            setCompletionNote('');
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -180,18 +265,43 @@ const UserDashboard = () => {
                     fontSize: '0.8rem', 
                     color: 'var(--text-secondary)', 
                     borderTop: '1px solid var(--border-color)', 
-                    paddingTop: '16px'
+                    paddingTop: '16px',
+                    marginTop: '4px'
                   }}>
                     <span>Assigned: {formatDate(task.created_at)}</span>
                     
-                    {task.status === 'pending' && (
+                    {task.status === 'pending' && activeCompletingTaskId !== task.id && (
                       <button 
                         className="btn btn-primary btn-sm"
                         style={{ fontSize: '0.75rem', padding: '6px 12px' }}
-                        onClick={() => handleMarkCompleted(task.id)}
+                        onClick={() => {
+                          setActiveCompletingTaskId(task.id);
+                          setCompletionNote('');
+                        }}
                       >
                         Mark Completed
                       </button>
+                    )}
+
+                    {task.status === 'completed' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span>Finished: {formatFullDate(task.completed_at)}</span>
+                        {canReopen(task.completed_at) && (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            style={{ 
+                              fontSize: '0.75rem', 
+                              padding: '4px 8px', 
+                              borderColor: 'var(--accent-primary)', 
+                              color: 'var(--accent-primary)',
+                              marginLeft: '8px'
+                            }}
+                            onClick={() => handleReopenTask(task.id)}
+                          >
+                            Reopen
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

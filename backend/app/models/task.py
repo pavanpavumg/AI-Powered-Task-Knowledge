@@ -19,6 +19,8 @@ class Task(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completion_note = Column(String(500), nullable=True)
+    completed_at = Column(DateTime, nullable=True)
 
     assignee = relationship("User", foreign_keys=[assigned_to], back_populates="assigned_tasks")
     creator = relationship("User", foreign_keys=[created_by], back_populates="created_tasks")
